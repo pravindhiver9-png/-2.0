@@ -5,73 +5,11 @@ import 'db.dart';
 import 'state.dart';
 import 'theme.dart';
 import 'util.dart';
+import 'forms.dart';
+import 'loan_screens.dart';
 
-typedef Rec = Map<String, Object?>;
 
 // ---------- generic helpers ----------
-class F {
-  final String k, label, init, type; // type: text | num | date
-  F(this.k, this.label, this.init, {this.type = 'text'});
-}
-
-Future<Map<String, String>?> askFields(BuildContext c, String title, List<F> fs) {
-  final ctr = {for (final f in fs) f.k: TextEditingController(text: f.init)};
-  String? err;
-  return showDialog<Map<String, String>>(
-    context: c,
-    builder: (dc) => StatefulBuilder(
-      builder: (dc, set) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            for (final f in fs)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: TextField(
-                  controller: ctr[f.k],
-                  readOnly: f.type == 'date',
-                  keyboardType: f.type == 'num' ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-                  decoration: InputDecoration(labelText: f.label, suffixIcon: f.type == 'date' ? const Icon(Icons.calendar_today, size: 18) : null),
-                  onTap: f.type != 'date'
-                      ? null
-                      : () async {
-                          final d = await showDatePicker(
-                              context: dc,
-                              initialDate: parseDmy(ctr[f.k]!.text) ?? DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2100));
-                          if (d != null) ctr[f.k]!.text = dmyDate(d);
-                        },
-                ),
-              ),
-            if (err != null) Text(err!, style: const TextStyle(color: Colors.red)),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dc), child: Text(app.t('cancel'))),
-          FilledButton(
-            onPressed: () {
-              final out = <String, String>{};
-              for (final f in fs) {
-                final v = ctr[f.k]!.text.trim();
-                if (v.isEmpty) { set(() => err = app.t('required')); return; }
-                if (f.type == 'num') {
-                  final n = double.tryParse(v);
-                  if (n == null || n <= 0) { set(() => err = app.t('bad_amt')); return; }
-                }
-                if (f.type == 'date' && parseDmy(v) == null) { set(() => err = app.t('required')); return; }
-                out[f.k] = v;
-              }
-              Navigator.pop(dc, out);
-            },
-            child: Text(app.t('save')),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 /// Editable preview. returns null = cancel, (text, share?)
 Future<(String, bool)?> previewDialog(BuildContext c, String msg) {
   final t = TextEditingController(text: msg);
@@ -101,9 +39,9 @@ class RecordList extends StatefulWidget {
   final String Function(Rec) head, sub, searchText;
   final num Function(Rec) amount;
   final Future<void> Function()? onAdd;
-  final Future<void> Function(Rec)? onEdit;
+  final Future<void> Function(Rec)? onEdit, onDelete;
   const RecordList({super.key, required this.title, required this.table, required this.load, required this.head,
-      required this.sub, required this.searchText, required this.amount, this.onAdd, this.onEdit});
+      required this.sub, required this.searchText, required this.amount, this.onAdd, this.onEdit, this.onDelete});
   @override
   State<RecordList> createState() => _RecordListState();
 }
@@ -140,7 +78,7 @@ class _RecordListState extends State<RecordList> {
 
   @override
   Widget build(BuildContext context) {
-    final list = rows.where((r) => widget.searchText(r).toLowerCase().contains(q.toLowerCase())).toList();
+    final list = rows.where((r) => smartMatch(widget.searchText(r), q)).toList();
     final total = list.fold<double>(0, (a, r) => a + widget.amount(r));
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
@@ -178,7 +116,7 @@ class _RecordListState extends State<RecordList> {
                         Text(rs(widget.amount(r)), style: const TextStyle(fontWeight: FontWeight.bold)),
                         if (app.isAdmin) ...[
                           if (widget.onEdit != null) IconButton(icon: const Icon(Icons.edit, color: green, size: 20), onPressed: () => widget.onEdit!(r)),
-                          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => del(r)),
+                          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => widget.onDelete != null ? widget.onDelete!(r) : del(r)),
                         ],
                       ]),
                     );
@@ -211,8 +149,8 @@ class TxnHub extends StatelessWidget {
       tile(Icons.savings, 'deposit_list', const DepositList()),
       tile(Icons.receipt_long, 'expense_list', const ExpenseList()),
       tile(Icons.add_card, 'extra_list', const ExtraList()),
-      tile(Icons.volunteer_activism, 'loan_list', null),
-      tile(Icons.published_with_changes, 'repay_list', null),
+      tile(Icons.volunteer_activism, 'loan_list', const LoanList()),
+      tile(Icons.published_with_changes, 'repay_list', const RepayList()),
     ]);
   }
 }
@@ -312,72 +250,90 @@ class _DepositFormState extends State<DepositForm> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(app.t('deposit_title'))),
-        body: members.isEmpty
-            ? Center(child: Text(app.t('no_members')))
-            : Column(children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(children: [
-                    Expanded(child: TextField(controller: amountC, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: app.t('amount')))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: dateC,
-                        readOnly: true,
-                        decoration: InputDecoration(labelText: app.t('date'), suffixIcon: const Icon(Icons.calendar_today, size: 18)),
-                        onTap: () async {
-                          final d = await showDatePicker(context: context, initialDate: parseDmy(dateC.text) ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                          if (d != null) setState(() => dateC.text = dmyDate(d));
-                        },
+        body: SafeArea(
+          child: Column(children: [
+            AppHeader(onGear: () => Navigator.maybePop(context)),
+            TitleBanner(icon: Icons.savings, title: app.t('deposit_title'), sub: app.t('fill_info')),
+            const SizedBox(height: 8),
+            Expanded(
+              child: members.isEmpty
+                  ? Center(child: Text(app.t('no_members')))
+                  : Column(children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(children: [
+                          Expanded(child: TextField(controller: amountC, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: app.t('amount')))),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: dateC,
+                              readOnly: true,
+                              decoration: InputDecoration(labelText: app.t('date'), suffixIcon: const Icon(Icons.calendar_today, size: 18, color: green)),
+                              onTap: () async {
+                                final d = await showDatePicker(context: context, initialDate: parseDmy(dateC.text) ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                                if (d != null) setState(() => dateC.text = dmyDate(d));
+                              },
+                            ),
+                          ),
+                        ]),
                       ),
-                    ),
-                  ]),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(children: [
-                    const Spacer(),
-                    SizedBox(width: 78, child: Text(app.t('current_m'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
-                    SizedBox(width: 78, child: Text(app.t('prev_m'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
-                  ]),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: members.length,
-                    itemBuilder: (_, i) {
-                      final m = members[i];
-                      final id = m['id'] as String;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Neo(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          child: Row(children: [
-                            Expanded(child: Text(name(m), style: const TextStyle(fontWeight: FontWeight.w600))),
-                            SizedBox(width: 78, child: Checkbox(value: cur.contains(id), activeColor: green, onChanged: (v) => setState(() => v! ? cur.add(id) : cur.remove(id)))),
-                            SizedBox(width: 78, child: Checkbox(value: prev.contains(id), activeColor: green, onChanged: (v) => setState(() => v! ? prev.add(id) : prev.remove(id)))),
-                          ]),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(children: [
+                          const Spacer(),
+                          SizedBox(width: 78, child: Text(app.t('current_m'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
+                          SizedBox(width: 78, child: Text(app.t('prev_m'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 11))),
+                        ]),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                          itemCount: members.length,
+                          itemBuilder: (_, i) {
+                            final m = members[i];
+                            final id = m['id'] as String;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Neo(
+                                radius: 18,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                                child: Row(children: [
+                                  Expanded(child: Text(name(m), style: const TextStyle(fontWeight: FontWeight.w600))),
+                                  SizedBox(width: 78, child: Checkbox(value: cur.contains(id), activeColor: green, onChanged: (v) => setState(() => v! ? cur.add(id) : cur.remove(id)))),
+                                  SizedBox(width: 78, child: Checkbox(value: prev.contains(id), activeColor: green, onChanged: (v) => setState(() => v! ? prev.add(id) : prev.remove(id)))),
+                                ]),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SizedBox(width: double.infinity, child: FilledButton(onPressed: save, child: Text(app.t('preview')))),
-                ),
-              ]),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(backgroundColor: greenDark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+                            onPressed: save,
+                            icon: const Icon(Icons.visibility),
+                            label: Text(app.t('preview'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ),
+                    ]),
+            ),
+          ]),
+        ),
       );
 }
 
 // ---------- expenses ----------
 Future<void> addExpense(BuildContext c, [Rec? r]) async {
   final v = await askFields(c, app.t('expense_title'), [
-    F('n', app.t('expense_name'), '${r?['name'] ?? ''}'),
-    F('a', app.t('amount'), r == null ? '' : amt(r['amount'] as num), type: 'num'),
-    F('d', app.t('date'), r == null ? dmyDate(DateTime.now()) : dmy('${r['date']}'), type: 'date'),
-  ]);
+    F('n', app.t('expense_name'), '${r?['name'] ?? ''}', icon: Icons.receipt_long),
+    F('a', app.t('amount'), r == null ? '' : amt(r['amount'] as num), type: 'num', icon: Icons.currency_rupee),
+    F('d', app.t('date'), r == null ? dmyDate(DateTime.now()) : dmy('${r['date']}'), type: 'date', icon: Icons.calendar_month),
+  ], icon: Icons.receipt_long);
   if (v == null || !c.mounted) return;
   final date = parseDmy(v['d']!)!, a = double.parse(v['a']!);
   bool share = false;
@@ -421,9 +377,9 @@ class ExpenseList extends StatelessWidget {
 // ---------- additional amount ----------
 Future<void> addExtra(BuildContext c, [Rec? r]) async {
   final v = await askFields(c, app.t('extra_title'), [
-    F('a', app.t('amount'), r == null ? '' : amt(r['amount'] as num), type: 'num'),
-    F('d', app.t('date'), r == null ? dmyDate(DateTime.now()) : dmy('${r['date']}'), type: 'date'),
-  ]);
+    F('a', app.t('amount'), r == null ? '' : amt(r['amount'] as num), type: 'num', icon: Icons.currency_rupee),
+    F('d', app.t('date'), r == null ? dmyDate(DateTime.now()) : dmy('${r['date']}'), type: 'date', icon: Icons.calendar_month),
+  ], icon: Icons.add_card);
   if (v == null) return;
   final row = {'amount': double.parse(v['a']!), 'date': isoOf(parseDmy(v['d']!)!)};
   await DB.tx((t) async {

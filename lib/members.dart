@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'db.dart';
 import 'state.dart';
 import 'theme.dart';
+import 'util.dart';
 import 'dart:convert';
 
 class MembersScreen extends StatefulWidget {
@@ -84,7 +85,7 @@ class _MembersState extends State<MembersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final list = rows.where((r) => ('${r['name']} ${r['surname']} ${r['mobile']}').toLowerCase().contains(q.toLowerCase())).toList();
+    final list = rows.where((r) => smartMatch('${r['name']} ${r['surname']} ${r['mobile']}', q)).toList();
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: app.isAdmin ? FloatingActionButton(backgroundColor: green, onPressed: () => form(), child: const Icon(Icons.add, color: Colors.white)) : null,

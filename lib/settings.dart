@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'state.dart';
 import 'theme.dart';
 import 'util.dart';
-import 'entries.dart';
+import 'forms.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

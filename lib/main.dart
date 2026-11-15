@@ -3,6 +3,7 @@ import 'db.dart';
 import 'state.dart';
 import 'theme.dart';
 import 'auth.dart';
+import 'loans.dart';
 
 final navKey = GlobalKey<NavigatorState>();
 
@@ -10,6 +11,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await app.init();
   await DB.init();
+  await Loans.processGrace();
   runApp(const App());
 }
 
