@@ -9,7 +9,7 @@ import 'state.dart';
 import 'theme.dart';
 import 'util.dart';
 
-Widget lf(IconData ic, String label, Widget child, {bool req = false}) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+Widget lf(IconData ic, String label, {required Widget child, bool req = false}) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         CircleAvatar(radius: 12, backgroundColor: green, child: Icon(ic, size: 13, color: Colors.white)),
         const SizedBox(width: 6),
