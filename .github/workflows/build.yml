@@ -21,8 +21,11 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0' # Aap apne flutter version ke anusar badal sakte hain
+          flutter-version: '3.19.0'
           channel: 'stable'
+
+      - name: Generate Android Project Files
+        run: flutter create . --project-name hamara_samuh --platforms android
 
       - name: Get dependencies
         run: flutter pub get
@@ -35,4 +38,3 @@ jobs:
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-
