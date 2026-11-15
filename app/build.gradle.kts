@@ -1,4 +1,3 @@
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,14 +7,6 @@ android {
     namespace = "in.hamari.chitfund.demo"
     compileSdk = 35
 
-    defaultConfig {
-        applicationId = "in.hamari.chitfund.demo"
-        minSdk = 23
-        targetSdk = 28
-        versionCode = 1
-        versionName = "1.0"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -23,5 +14,13 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId = "in.hamari.chitfund.demo"
+        minSdk = 23
+        targetSdk = 28
+        versionCode = 1
+        versionName = "1.0"
     }
 }
