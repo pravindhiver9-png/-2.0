@@ -1,4 +1,4 @@
-package in.hamari.chitfund.demo
+package `in`.hamari.chitfund.demo
 
 import android.app.Activity
 import android.os.Bundle
